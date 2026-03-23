@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/pharmkg
+      - MODEL_PATH=/app/checkpoints
+    volumes:
+      - ../checkpoints:/app/checkpoints
+      - ../data:/app/data
+      - ../logs:/app/logs
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - pharmkg-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - pharmkg-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pharmkg
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - pharmkg-network
+
+  # Optional: Jupyter notebook for experimentation
+  notebook:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: >
+      bash -c "pip install jupyter &&
+               jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root"
+    ports:
+      - "8888:8888"
+    volumes:
+      - ..:/app
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - pharmkg-network
+    profiles:
+      - dev
+
+volumes:
+  redis-data:
+  postgres-data:
+
+networks:
+  pharmkg-network:
+    driver: bridge
