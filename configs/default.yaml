@@ -1,0 +1,114 @@
+# PharmKG-DTI Project Configuration
+
+# Data paths
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  embeddings_dir: "data/embeddings"
+  
+  # Dataset configurations
+  datasets:
+    drugbank:
+      url: "https://go.drugbank.com/releases/latest"
+      download: true
+    biokg:
+      url: "https://github.com/dsi-bdi/biokg"
+      download: true
+    openbiolink:
+      url: "https://github.com/OpenBioLink/OpenBioLink"
+      download: true
+    stitch:
+      url: "http://stitch.embl.de/"
+      download: false  # Manual download required
+    string:
+      url: "https://string-db.org/"
+      download: false  # Manual download required
+
+# Model configurations
+model:
+  name: "DHGT_DTI"
+  hidden_dim: 256
+  num_layers: 3
+  num_heads: 8
+  dropout: 0.3
+  
+  # Heterogeneous GNN settings
+  heterogeneous:
+    metapaths:
+      - ["drug", "target", "drug"]
+      - ["drug", "disease", "drug"]
+      - ["target", "pathway", "target"]
+      - ["drug", "target", "pathway", "target", "drug"]
+    
+  # Graph Transformer settings
+  graph_transformer:
+    use_residual: true
+    attention_dropout: 0.1
+    
+  # Feature fusion settings
+  feature_fusion:
+    use_drug_structure: true
+    use_protein_sequence: true
+    use_network_topology: true
+
+# Training configurations
+training:
+  batch_size: 256
+  learning_rate: 0.001
+  num_epochs: 200
+  early_stopping_patience: 20
+  
+  optimizer:
+    name: "AdamW"
+    weight_decay: 0.01
+    
+  scheduler:
+    name: "ReduceLROnPlateau"
+    factor: 0.5
+    patience: 10
+    
+  loss:
+    name: "BCEWithLogitsLoss"
+    pos_weight: 5.0  # For imbalanced data
+
+# Evaluation configurations
+evaluation:
+  metrics:
+    - "auc"
+    - "aupr"
+    - "hits@1"
+    - "hits@10"
+    - "hits@50"
+    - "mrr"
+  
+  k_fold:
+    enabled: true
+    k: 5
+    
+  # Link prediction task settings
+  link_prediction:
+    negative_sampling_ratio: 1.0
+    eval_batch_size: 1024
+
+# Hardware configurations
+hardware:
+  device: "cuda"  # "cuda" or "cpu"
+  num_workers: 4
+  pin_memory: true
+
+# Logging configurations
+logging:
+  use_wandb: true
+  use_tensorboard: true
+  log_interval: 10
+  checkpoint_interval: 10
+  
+  wandb:
+    project: "pharmkg-dti"
+    entity: null
+
+# Experimental settings
+experiment:
+  seed: 42
+  save_predictions: true
+  save_embeddings: true
