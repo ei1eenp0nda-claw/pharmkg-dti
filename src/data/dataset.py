@@ -291,35 +291,71 @@ class PharmKGDataset:
         
         return torch.tensor(features, dtype=torch.float)
     
-    def _generate_synthetic_data(self):
-        """Generate synthetic data for testing when real data is unavailable."""
+    def _generate_synthetic_data(self, n_drugs: int = 500, n_proteins: int = 1000, 
+                                  n_positives: int = 2000, n_negatives: int = 2000,
+                                  random_seed: int = 42):
+        """
+        Generate synthetic data for testing when real data is unavailable.
+        
+        Uses fixed negative sampling for reproducibility (following OpenBioLink best practices).
+        
+        Args:
+            n_drugs: Number of drug nodes
+            n_proteins: Number of protein nodes
+            n_positives: Number of positive interactions
+            n_negatives: Number of negative interactions (fixed 1:1 ratio for reproducibility)
+            random_seed: Random seed for reproducibility
+        """
         print("Generating synthetic data for testing...")
+        print(f"  Drugs: {n_drugs}, Proteins: {n_proteins}")
+        print(f"  Positive edges: {n_positives}, Negative edges: {n_negatives}")
+        print(f"  Random seed: {random_seed} (fixed for reproducibility)")
         
-        n_drugs = 500
-        n_proteins = 1000
-        n_interactions = 2000
+        # Set seed for reproducibility
+        torch.manual_seed(random_seed)
+        np.random.seed(random_seed)
         
-        self.drug_ids = [f"DRUG_{i}" for i in range(n_drugs)]
-        self.protein_ids = [f"PROT_{i}" for i in range(n_proteins)]
+        self.drug_ids = [f"DRUG_{i:04d}" for i in range(n_drugs)]
+        self.protein_ids = [f"PROT_{i:04d}" for i in range(n_proteins)]
         
-        # Generate random features
+        # Generate features
         self.drug_features = torch.randn(n_drugs, 256)
         self.protein_features = torch.randn(n_proteins, 256)
         
-        # Generate random DTI edges
-        drug_indices = torch.randint(0, n_drugs, (n_interactions,))
-        protein_indices = torch.randint(0, n_proteins, (n_interactions,))
-        self.dti_edges = torch.stack([drug_indices, protein_indices])
-        self.dti_labels = torch.ones(n_interactions)
+        # Generate positive DTI edges (ensuring no duplicates)
+        existing_edges = set()
+        pos_edges_list = []
         
-        # Generate some negative samples
-        n_negatives = 2000
-        neg_drug_indices = torch.randint(0, n_drugs, (n_negatives,))
-        neg_protein_indices = torch.randint(0, n_proteins, (n_negatives,))
+        while len(pos_edges_list) < n_positives:
+            d = torch.randint(0, n_drugs, (1,)).item()
+            p = torch.randint(0, n_proteins, (1,)).item()
+            if (d, p) not in existing_edges:
+                existing_edges.add((d, p))
+                pos_edges_list.append([d, p])
         
-        # Combine positive and negative
-        self.dti_edges = torch.cat([self.dti_edges, torch.stack([neg_drug_indices, neg_protein_indices])], dim=1)
-        self.dti_labels = torch.cat([self.dti_labels, torch.zeros(n_negatives)])
+        # Generate fixed negative samples
+        neg_edges_list = []
+        while len(neg_edges_list) < n_negatives:
+            d = torch.randint(0, n_drugs, (1,)).item()
+            p = torch.randint(0, n_proteins, (1,)).item()
+            if (d, p) not in existing_edges:
+                existing_edges.add((d, p))
+                neg_edges_list.append([d, p])
+        
+        # Combine and create tensors
+        all_edges = pos_edges_list + neg_edges_list
+        all_labels = [1] * n_positives + [0] * n_negatives
+        
+        # Shuffle with fixed seed
+        indices = np.random.permutation(len(all_edges))
+        all_edges = [all_edges[i] for i in indices]
+        all_labels = [all_labels[i] for i in indices]
+        
+        self.dti_edges = torch.tensor(all_edges, dtype=torch.long).t()
+        self.dti_labels = torch.tensor(all_labels, dtype=torch.float)
+        
+        print(f"  Total edges: {self.dti_edges.size(1)} (Pos: {n_positives}, Neg: {n_negatives})")
+        print(f"  ✓ Fixed negative sampling applied for reproducibility")
     
     def _build_edge_index(self, df: pd.DataFrame, src_ids: List[str], dst_ids: List[str]) -> torch.Tensor:
         """Build edge index tensor from DataFrame."""
